@@ -1,0 +1,20 @@
+(in-package :cl-user)
+
+(defpackage #:cl-163-music-asd
+  (:use :cl :asdf))
+
+(in-package #:cl-163-music-asd)
+
+(defsystem :cl-163-music
+  :version "0.0.1"
+  :description "163 music"
+  :author "tskshy<tanshuaitskshy@gmail.com>"
+  :license "MIT"
+  :serial t
+  :depends-on (#:drakma
+	       #:yason
+	       #:flexi-stream
+	       #:cl-base64
+	       #:ironclad)
+  :components ((:file "package")
+	       (:file "api")))
