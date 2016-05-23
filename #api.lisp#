@@ -149,7 +149,7 @@ SIMPLE TEST FUNCTION
 	(yason:parse stream :object-as :plist)))
 
 #+test
-(expt 102788927505630524891970060280564889176 65537)
+(fast-expt 102788927505630524891970060280564889176 65537)
 
 
 (defun fast-expt (base power)
