@@ -32,7 +32,8 @@
   (ironclad:byte-array-to-hex-string
    (ironclad:digest-sequence
     :md5    
-    (ironclad:ascii-string-to-byte-array str))))
+    ;(ironclad:ascii-string-to-byte-array str)
+    (flexi-streams:string-to-octets str :external-format :utf8))))
 
 (defun create-secret-key (&optional (length 16))
   (cond ((or (< length 0) (> length 32)) (error "Illegal length. Need [0 - 32]"))
@@ -65,3 +66,85 @@
 		   enc-text
 		   (string+ "0" (res-str (- i 1))))))
       (res-str (calc-num ml 0)))))
+
+(defun convert-utf8-to-hex (str)
+  (let* ((arr (flexi-streams:string-to-octets str :external-format :utf8))
+	 (len (length arr))
+	 (radix 16))
+    (labels ((convert (arr index str-hex)
+	       (if (= index (- len 1))
+		   (concatenate 'string
+				str-hex
+				(write-to-string (aref arr index) :base radix))
+		   (convert arr
+			    (+ 1 index)
+			    (concatenate 'string
+					 str-hex
+					 (write-to-string (aref arr index)
+							  :base radix))))))
+      (convert arr 0 nil))))
+
+(defun aes-cbc-encrypt (plaintext key &optional (iv "0102030405060708"))
+  "
+AES具体算法: AES-128-CBC, 输出格式: base64
+默认初始化向量 0102030405060708
+明文需要padding
+"
+  (let* ((cipher (ironclad:make-cipher 'ironclad:aes
+				       :key (flexi-streams:string-to-octets key)
+				       :mode 'ironclad:cbc
+				       :initialization-vector (flexi-streams:string-to-octets iv)))
+	 (ptp (aes-padding plaintext))
+	 (ptp-byte-arr (flexi-streams:string-to-octets ptp :external-format :utf8))
+	 (cipher-byte-arr (make-array (length ptp-byte-arr)
+				      :initial-element 0
+				      :element-type '(unsigned-byte 8))))
+    (ironclad:encrypt cipher ptp-byte-arr cipher-byte-arr)
+    (cl-base64:usb8-array-to-base64-string cipher-byte-arr)))
+
+(defun rsa-encrypt (text pubkey modulus)
+  "
+RSA加密采用非常规填充方式(非PKCS1 / PKCS1_OAEP)
+此处是向前补0
+这样加密出来的密文有个特点：加密过程没有随机因素，明文多次加密后得到的密文是相同的
+然而，我们常用的 RSA 加密模块均不支持此种加密，所以需要手写一段简单的 RSA 加密
+加密过程 convertUtf8toHex(reversedText) ^ e % N
+输入过程中需要对加密字符串进行 hex 格式转码
+"
+  (let ((n-text (parse-integer (convert-utf8-to-hex (reverse text)) :radix 16))
+	(n-pubkey (parse-integer pubkey :radix 16))
+	(n-modulus (parse-integer modulus :radix 16)))
+    (add-padding (write-to-string (mod (expt n-text n-pubkey) n-modulus) :base 16) modulus)))
+
+(defun encrypt-user-account (username password &optional (remember "true"))
+  (let ((table (make-hash-table))
+	(sec-key (create-secret-key)))
+    (setf (gethash "username" table) username)
+    (setf (gethash "password" table) (md5 password))
+    (setf (gethash "rememberLogin" table) remember)
+    (let* ((text (with-output-to-string (stream) (yason:encode table stream)))
+	   (enc-text (aes-cbc-encrypt (aes-cbc-encrypt text *nonce*) sec-key))
+	   (enc-sec-key (rsa-encrypt sec-key *pub-key* *modulus*)))
+      (list (cons "params" enc-text)
+	    (cons "encSecKey" (string-downcase enc-sec-key))))))
+
+#+test
+(defun encrypt-request (username password)
+  "
+SIMPLE TEST FUNCTION
+"
+  (let ((stream (drakma:http-request "http://music.163.com/weapi/login/"
+				     :method :post
+				     :user-agent " Mozilla/5.0 (Macintosh; Intel Mac OS X 10.10; rv:46.0) Gecko/20100101 Firefox/46.0"
+				     :accept "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
+				     :content-type "application/x-www-form-urlencoded"
+				     :additional-headers '(("Host" . "music.163.com")
+							   ("Referer" . "http://music.163.com")
+							   ("Accept-Language" . "zh-CN,zh;q=0.8,en-US;q=0.5,en;q=0.3")
+							   ("Accep:at-Encoding" . "gzip, deflate"))
+				     :parameters (encrypt-user-account username password)
+				     :external-format-in :utf8
+				     :external-format-out :utf8
+				     :want-stream t)))
+	(setf (flexi-streams:flexi-stream-external-format stream) :utf-8)
+	(yason:parse stream :object-as :plist)))

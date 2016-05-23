@@ -1,5 +1,11 @@
 (in-package :cl-user)
 
+;(ql:quickload '("drakma"
+;		"yason"
+;		"flexi-streams"
+;		"cl-base64"
+;		"ironclad"))
+
 (defpackage #:cl-163-music-asd
   (:use :cl :asdf))
 
@@ -13,7 +19,7 @@
   :serial t
   :depends-on (#:drakma
 	       #:yason
-	       #:flexi-stream
+	       #:flexi-streams
 	       #:cl-base64
 	       #:ironclad)
   :components ((:file "package")
