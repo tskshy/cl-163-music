@@ -20,6 +20,36 @@
 ;        params = enc-text
 ;        encSecKey = enc-sec-key
 
+(defun square (x)
+  (* x x))
+
+(defun fast-expt (base exponent)
+  "base ^ power"
+  (labels ((expt-iter (b e a)
+	     (cond ((= e 0) a)
+		   ((evenp e) (expt-iter (square b) (/ e 2) a))
+		   (t (expt-iter b (- e 1) (* b a))))))
+    (expt-iter base exponent 1)))
+
+(defun expt-mod (base exponent modulus)
+  "As (mod (expt base exponent) modulus), but more efficient.
+^表示幂运算  %表示取余 
+1. (x * y) % m = (x * (y % m)) % m = ((x % m) * (y % m)) % m
+2. (x ^ y) % m = ((x % m) ^ y) % m
+
+e.g.
+(evenp n) => t
+x^n % m ==> (x^(n / 2))^2 % m ==> (x^(n / 2) % m)^2 % m
+(evenp n) => nil
+x^n % m ==> (x * x^(n - 1)) % m ==> (x * (x^(n - 1) % m)) % m
+"
+  (if (= exponent 0)
+      1
+      (if (evenp exponent)
+	  (mod (square (expt-mod base (/ exponent 2) modulus)) modulus)
+	  (mod (* base (expt-mod base (- exponent 1) modulus)) modulus))))
+
+
 (defun string+ (&rest s)
   (apply #'concatenate 'string s))
 
@@ -109,7 +139,7 @@ RSA加密采用非常规填充方式(非PKCS1 / PKCS1_OAEP)
   (let ((n-text (parse-integer (convert-utf8-to-hex (reverse text)) :radix 16))
 	(n-pubkey (parse-integer pubkey :radix 16))
 	(n-modulus (parse-integer modulus :radix 16)))
-    (add-padding (write-to-string (mod (expt n-text n-pubkey) n-modulus) :base 16) modulus)))
+    (add-padding (write-to-string (expt-mod n-text n-pubkey n-modulus) :base 16) modulus)))
 
 (defun encrypt-user-account (username password &optional
 						 (remember "true")
@@ -152,10 +182,12 @@ SIMPLE TEST FUNCTION
 (fast-expt 102788927505630524891970060280564889176 65537)
 
 
-(defun fast-expt (base power)
-  (labels ((square (x) (* x x))
-	   (expt-iter (b p a)
-	     (cond ((= p 0) a)
-		   ((evenp p) (expt-iter (square b) (/ p 2) a))
-		   (t (expt-iter b (- p 1) (* b a))))))
-    (expt-iter base power 1)))
+;150567550686072292363869403688778150467
+
+;65537
+
+;157794750267131502212476817800345498121872783333389747424011531025366277535262539913701806290766479189477533597854989606803194253978660329941980786072432806427833685472618792592200595694346872951301770580765135349259590167490536138082469680638514416594216629258349130257685001248172188325316586707301643237607
+
+;68557821992394062405528844047665704020814692746684528905862705136112325609042677156688581857248282426978568312910163338913186472129471867307582877886816795339495146041100956742853165375758535520523151336907528791932972437914671790607051349903777553468473075307016998698227997606532624536443854468962699856094
+
+
