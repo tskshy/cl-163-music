@@ -1,3 +1,9 @@
 *.FASL
 *.fasl
 *.lisp-temp
+
+# ignore emacs and vim tmp file
+\#*\#
+.\#*
+*.swp                                                                                                                   
+*.swo
