@@ -1,25 +1,5 @@
 (in-package :cl-163-music)
 
-;;;;网易云登录
-
-
-;;;;登录整体思路
-;    text = {
-;        username: xx,
-;        password: md5(xx),
-;        rememberLogin: true
-;    }
-;    
-;    sec-key = random-secret-key (16)
-;    
-;    enc-text = aes(aes(text, nonce), sec-key)
-;    enc-sec-key = rsa(sec-key, pub-key, modulus)
-;
-;    http request
-;    post parameters:
-;        params = enc-text
-;        encSecKey = enc-sec-key
-
 (defun square (x)
   (* x x))
 
@@ -141,21 +121,25 @@ RSA加密采用非常规填充方式(非PKCS1 / PKCS1_OAEP)
 	(n-modulus (parse-integer modulus :radix 16)))
     (add-padding (write-to-string (expt-mod n-text n-pubkey n-modulus) :base 16) modulus)))
 
-(defun encrypt-user-account (username password &optional
-						 (remember "true")
-						 (nonce "0CoJUm6Qyw8W8jud")
-						 (pubkey "010001")
-						 (modulus "00e0b509f6259df8642dbc35662901477df22677ec152b5ff68ace615bb7b725152b3ab17a876aea8a5aa76d2e417629ec4ee341f56135fccf695280104e0312ecbda92557c93870114af6c9d05c4f7f0c3685b7a46bee255932575cce10b424d813cfe4875d3e82047b97ddef52741d546b8e289dc6935b3ece0462db0a22b8e7"))
-  (let ((table (make-hash-table))
-	(sec-key (create-secret-key)))
-    (setf (gethash "username" table) username)
-    (setf (gethash "password" table) (md5 password))
-    (setf (gethash "rememberLogin" table) remember)
+(defun encrypt-info (&rest lst)
+  (let ((table (make-hash-table :size (length lst)))
+	(sec-key (create-secret-key))
+	(nonce "0CoJUm6Qyw8W8jud")
+	(pubkey "010001")
+	(modulus "00e0b509f6259df8642dbc35662901477df22677ec152b5ff68ace615bb7b725152b3ab17a876aea8a5aa76d2e417629ec4ee341f56135fccf695280104e0312ecbda92557c93870114af6c9d05c4f7f0c3685b7a46bee255932575cce10b424d813cfe4875d3e82047b97ddef52741d546b8e289dc6935b3ece0462db0a22b8e7"))
+    (dotimes (i (length lst))
+      (let ((e (nth i lst)))
+	(setf (gethash (car e) table) (cdr e))))
     (let* ((text (with-output-to-string (stream) (yason:encode table stream)))
 	   (enc-text (aes-cbc-encrypt (aes-cbc-encrypt text nonce) sec-key))
 	   (enc-sec-key (rsa-encrypt sec-key pubkey modulus)))
       (list (cons "params" enc-text)
 	    (cons "encSecKey" (string-downcase enc-sec-key))))))
+
+(defun encrypt-user-account (username password &optional (remember "true"))
+  (encrypt-info `("username" . ,username)
+		`("password" . ,(md5 password))
+		`("rememberLogin" . ,remember)))
 
 #+test
 (defun encrypt-request (username password)
@@ -178,3 +162,28 @@ SIMPLE TEST FUNCTION
 	(setf (flexi-streams:flexi-stream-external-format stream) :utf-8)
 	(yason:parse stream :object-as :plist)))
 
+
+;;;;网易云登录
+
+;;;;登录整体思路
+;    text = {
+;        username: xx,
+;        password: md5(xx),
+;        rememberLogin: true
+;    }
+;    
+;    sec-key = random-secret-key (16)
+;    
+;    enc-text = aes(aes(text, nonce), sec-key)
+;    enc-sec-key = rsa(sec-key, pub-key, modulus)
+;
+;    http request
+;    post parameters:
+;        params = enc-text
+;        encSecKey = enc-sec-key
+
+(defun mail-login (username password))
+
+
+;;;; 每日签到
+; curl 'http://music.163.com/weapi/point/dailyTask?csrf_token=b6ca3d80323560a81fb83c3509bb3a17' -H 'Accept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8' -H 'Accept-Encoding: gzip, deflate' -H 'Accept-Language: zh-CN,zh;q=0.8,en-US;q=0.5,en;q=0.3' -H 'Connection: keep-alive' -H 'Content-Type: application/x-www-form-urlencoded' -H 'Cookie: visited=true; __utma=94650624.1753221833.1463477851.1463728608.1464154273.13; __utmz=94650624.1463477851.1.1.utmcsr=(direct)|utmccn=(direct)|utmcmd=(none); __csrf=b6ca3d80323560a81fb83c3509bb3a17; usertrack=c+5+hlc8SDZD1jXDA1ZiAg==; _ntes_nnid=2fbef6f21a72307144f271b21a0076c4,1463568440526; Province=0; City=0; _ntes_nuid=2fbef6f21a72307144f271b21a0076c4; _ga=GA1.2.1955364583.1463568441; NETEASE_WDA_UID=32388043#|#1407163666227; JSESSIONID-WYYY=199c27ab9c554dd66913328de7a10d1df124cea8587657a9e6e03c297de01b0fe275562ee64b9c0fe75d48e4f70b90bc94df59a83555c95c98a0ee0bb2a27ff64d988a7f8ff0aba37b14d46c09ad5110b178f4ba5593520c6a0d16a1ffa3f3672798be4f3d6fd311a3ee94b7b69740f77f6bb65b06bf48a5748db25ad95b6c76129fcf68%3A1464156070551; _iuqxldmzr_=25; __utmb=94650624.3.10.1464154273; __utmc=94650624; __remember_me=true; MUSIC_U=6b470c1bc434f60e99dcb9d14e06692f1002c49c1ed319e878c7fe98cbb7825a07323d6b500f9f0858b91e9df94b352c5d6875572a075826c3061cd18d77b7a0' -H 'Host: music.163.com' -H 'Referer: http://music.163.com/discover' -H 'User-Agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10.10; rv:46.0) Gecko/20100101 Firefox/46.0' --data 'params=QJ1tTizoKR%2BJcPXpde%2B9UWzY4XnJrKEZSkXxRZviwGK0Bp7BoJdQ41q1iDYDWpgEjVM%2BWB2di6TzB2HWLMC%2F5QODSyauHKEjpdR%2B7iDN4vl%2BBB6bfBMl3yZv6OCodNZU&encSecKey=bc162b620d7e07b918c1c680f8a38dca08893c007918ad597c1d850f70c32472440525a76824a40bbdcb9e498ba74b13ffaba5f887870983e42928ddd39016042c684cb0f7ebc0531a51769388dc8908dba3c3b2e09e0e045ba5593986b0e59a885a8cb3c245b272c4f2d736ec0713f3334be05e9a5242cc2e78a059a640342b'
