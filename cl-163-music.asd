@@ -17,8 +17,7 @@
   :author "tskshy<tanshuaitskshy@gmail.com>"
   :license "MIT"
   :serial t
-  :depends-on (#:cl-ansi-term
-	       #:drakma
+  :depends-on (#:drakma
 	       #:yason
 	       #:flexi-streams
 	       #:cl-base64
